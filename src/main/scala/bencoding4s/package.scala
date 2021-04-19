@@ -6,4 +6,10 @@ package object bencoding4s {
     i <- Numbers.bigInt
     _ <- Parser.char('e')
   } yield BenInteger(i)
+
+  val benStringParser: Parser[BenString] = for {
+    stringLength <- Numbers.bigInt
+    _ <- Parser.char(':')
+    string <- Parser.length(stringLength.toInt)
+  } yield BenString(string)
 }
