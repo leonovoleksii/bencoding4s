@@ -1,6 +1,8 @@
 import cats.parse.{Numbers, Parser}
 
 package object bencoding4s {
+  val DefaultMaxDepth: Int = 500
+
   val benIntegerParser: Parser[BenInteger] = for {
     _ <- Parser.char('i')
     start <- Parser.index
@@ -24,6 +26,12 @@ package object bencoding4s {
     } yield BenList(values)
   }
 
+  def benListParser(maxDepth: Int): Parser[BenList] = if (maxDepth < 0) Parser.failWith("Maximum list depth reached") else for {
+    _ <- Parser.char('l')
+    values <- Parser.oneOf[BenValue](benIntegerParser :: benStringParser :: benDictionaryParser(maxDepth - 1) :: benListParser(maxDepth - 1) :: Nil).rep0
+    _ <- Parser.char('e')
+  } yield BenList(values)
+
   val benDictionaryParser: Parser[BenDictionary] = Parser.recursive[BenDictionary] { recurse =>
     for {
       _ <- Parser.char('d')
@@ -34,6 +42,15 @@ package object bencoding4s {
       _ <- Parser.char('e')
     } yield BenDictionary(keyValues.toMap)
   }
+
+  def benDictionaryParser(maxDepth: Int): Parser[BenDictionary] = if (maxDepth < 0) Parser.failWith("Maximum dictionary depth reached") else for {
+    _ <- Parser.char('d')
+    keyValues <- (for {
+      key <- benStringParser
+      value <- Parser.oneOf[BenValue](benIntegerParser :: benStringParser :: benListParser(maxDepth - 1) :: benDictionaryParser(maxDepth - 1) :: Nil)
+    } yield (key -> value)).rep0
+    _ <- Parser.char('e')
+  } yield BenDictionary(keyValues.toMap)
 
   def encode(bv: BenValue): String = bv match {
     case BenInteger(i) => s"i${i}e"
